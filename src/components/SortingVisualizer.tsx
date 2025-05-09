@@ -6,11 +6,16 @@ interface SortingVisualizerProps {
   algorithm?: SortingAlgorithm;
 }
 
+interface BarState {
+  value: number;
+  isComparing: boolean;
+  isSwapping: boolean;
+}
+
 const SortingVisualizer: React.FC<SortingVisualizerProps> = ({ algorithm = 'bubble' }) => {
-  const [array, setArray] = useState<number[]>([]);
+  const [array, setArray] = useState<BarState[]>([]);
   const [isSorting, setIsSorting] = useState(false);
-  const [comparingIndices, setComparingIndices] = useState<[number, number] | null>(null);
-  const [speed, setSpeed] = useState(25); // Speed in milliseconds (25ms default)
+  const [speed, setSpeed] = useState(25);
   const [selectedAlgorithm, setSelectedAlgorithm] = useState<SortingAlgorithm>('bubble');
   const [inputVector, setInputVector] = useState('');
   const [error, setError] = useState('');
@@ -18,20 +23,23 @@ const SortingVisualizer: React.FC<SortingVisualizerProps> = ({ algorithm = 'bubb
 
   // Constants for visualization
   const MIN_NUMBER = 5;
-  const MAX_NUMBER = 100; // Reduced max number for better readability
-  const ARRAY_SIZE = 20; // Reduced array size
+  const MAX_NUMBER = 100;
+  const ARRAY_SIZE = 20;
   const MIN_SPEED = 1;
-  const MAX_SPEED = 300; // Increased max speed to 300ms for even slower visualization
+  const MAX_SPEED = 300;
   const MAX_ELEMENTS = 100;
 
   // Generate a new random array
   const resetArray = () => {
-    const newArray = [];
+    const newArray: BarState[] = [];
     for (let i = 0; i < ARRAY_SIZE; i++) {
-      newArray.push(Math.floor(Math.random() * (MAX_NUMBER - MIN_NUMBER + 1)) + MIN_NUMBER);
+      newArray.push({
+        value: Math.floor(Math.random() * (MAX_NUMBER - MIN_NUMBER + 1)) + MIN_NUMBER,
+        isComparing: false,
+        isSwapping: false
+      });
     }
     setArray(newArray);
-    setComparingIndices(null);
     shouldStop.current = false;
   };
 
@@ -42,6 +50,39 @@ const SortingVisualizer: React.FC<SortingVisualizerProps> = ({ algorithm = 'bubb
 
   // Helper function to delay execution
   const delay = () => new Promise(resolve => setTimeout(resolve, speed));
+
+  // Helper function to update bar states
+  const updateBarStates = (indices: number[], states: Partial<BarState>) => {
+    setArray(prevArray => {
+      const newArray = [...prevArray];
+      indices.forEach(index => {
+        newArray[index] = { ...newArray[index], ...states };
+      });
+      return newArray;
+    });
+  };
+
+  // Helper function to swap bars with animation
+  const swapBars = async (index1: number, index2: number) => {
+    // Lift both bars
+    updateBarStates([index1, index2], { isComparing: true });
+    await delay();
+
+    // Swap values
+    setArray(prevArray => {
+      const newArray = [...prevArray];
+      [newArray[index1].value, newArray[index2].value] = [newArray[index2].value, newArray[index1].value];
+      return newArray;
+    });
+
+    // Mark as swapping
+    updateBarStates([index1, index2], { isSwapping: true });
+    await delay();
+
+    // Lower bars
+    updateBarStates([index1, index2], { isComparing: false, isSwapping: false });
+    await delay();
+  };
 
   // Bubble Sort Implementation
   const bubbleSort = async () => {
@@ -57,24 +98,31 @@ const SortingVisualizer: React.FC<SortingVisualizerProps> = ({ algorithm = 'bubb
       for (let j = 0; j < n - i - 1; j++) {
         if (shouldStop.current) break;
         
-        // Highlight the elements being compared
-        setComparingIndices([j, j + 1]);
+        // Compare bars
+        updateBarStates([j, j + 1], { isComparing: true });
         await delay();
 
-        if (newArray[j] > newArray[j + 1]) {
-          // Swap elements
-          [newArray[j], newArray[j + 1]] = [newArray[j + 1], newArray[j]];
+        if (newArray[j].value > newArray[j + 1].value) {
+          // Swap values
+          const temp = newArray[j].value;
+          newArray[j].value = newArray[j + 1].value;
+          newArray[j + 1].value = temp;
           setArray([...newArray]);
+          
+          // Show swapping animation
+          updateBarStates([j, j + 1], { isSwapping: true });
+          await delay();
           swapped = true;
         }
+        
+        // Reset states
+        updateBarStates([j, j + 1], { isComparing: false, isSwapping: false });
       }
 
-      // If no swapping occurred in this pass, array is sorted
       if (!swapped) break;
     }
 
     setIsSorting(false);
-    setComparingIndices(null);
   };
 
   // Insertion Sort Implementation
@@ -86,74 +134,104 @@ const SortingVisualizer: React.FC<SortingVisualizerProps> = ({ algorithm = 'bubb
     for (let i = 1; i < newArray.length; i++) {
       if (shouldStop.current) break;
 
-      let current = newArray[i];
+      const current = newArray[i].value;
       let j = i - 1;
 
-      while (j >= 0 && newArray[j] > current) {
+      // Highlight the current element being inserted
+      updateBarStates([i], { isComparing: true });
+      await delay();
+
+      while (j >= 0 && newArray[j].value > current) {
         if (shouldStop.current) break;
 
-        setComparingIndices([j, j + 1]);
+        // Compare and swap
+        updateBarStates([j, j + 1], { isComparing: true });
         await delay();
 
-        newArray[j + 1] = newArray[j];
+        // Move the larger element up
+        newArray[j + 1].value = newArray[j].value;
         setArray([...newArray]);
+        
+        // Show swapping animation
+        updateBarStates([j, j + 1], { isSwapping: true });
+        await delay();
+        
         j--;
       }
 
-      newArray[j + 1] = current;
+      // Place the current element in its correct position
+      newArray[j + 1].value = current;
       setArray([...newArray]);
+
+      // Reset states
+      updateBarStates([j + 1], { isComparing: false, isSwapping: false });
     }
 
     setIsSorting(false);
-    setComparingIndices(null);
   };
 
   // Merge Sort Implementation
-  const merge = async (arr: number[], left: number, mid: number, right: number) => {
+  const merge = async (arr: BarState[], left: number, mid: number, right: number) => {
     const n1 = mid - left + 1;
     const n2 = right - mid;
-    const L = arr.slice(left, mid + 1);
-    const R = arr.slice(mid + 1, right + 1);
+    
+    // Create temporary arrays with complete bar state
+    const L: BarState[] = arr.slice(left, mid + 1).map(bar => ({ ...bar }));
+    const R: BarState[] = arr.slice(mid + 1, right + 1).map(bar => ({ ...bar }));
 
     let i = 0, j = 0, k = left;
 
     while (i < n1 && j < n2) {
       if (shouldStop.current) return;
       
-      setComparingIndices([left + i, mid + 1 + j]);
+      // Highlight the elements being compared
+      updateBarStates([left + i, mid + 1 + j], { isComparing: true });
       await delay();
 
-      if (L[i] <= R[j]) {
-        arr[k] = L[i];
+      if (L[i].value <= R[j].value) {
+        arr[k] = { ...L[i] };
         i++;
       } else {
-        arr[k] = R[j];
+        arr[k] = { ...R[j] };
         j++;
       }
+      
+      // Update the array state
       setArray([...arr]);
+      updateBarStates([k], { isComparing: false });
       k++;
     }
 
+    // Copy remaining elements of L[]
     while (i < n1) {
       if (shouldStop.current) return;
-      arr[k] = L[i];
+      arr[k] = { ...L[i] };
       setArray([...arr]);
+      updateBarStates([k], { isComparing: false });
       i++;
       k++;
     }
 
+    // Copy remaining elements of R[]
     while (j < n2) {
       if (shouldStop.current) return;
-      arr[k] = R[j];
+      arr[k] = { ...R[j] };
       setArray([...arr]);
+      updateBarStates([k], { isComparing: false });
       j++;
       k++;
     }
   };
 
-  const mergeSortHelper = async (arr: number[], left: number, right: number) => {
+  const mergeSortHelper = async (arr: BarState[], left: number, right: number) => {
     if (left < right) {
       const mid = Math.floor((left + right) / 2);
+      
+      // Visualize the division
+      updateBarStates([left, right], { isComparing: true });
+      await delay();
+      updateBarStates([left, right], { isComparing: false });
+      
       await mergeSortHelper(arr, left, mid);
       await mergeSortHelper(arr, mid + 1, right);
       await merge(arr, left, mid, right);
@@ -163,39 +241,53 @@ const SortingVisualizer: React.FC<SortingVisualizerProps> = ({ algorithm = 'bubb
   const mergeSort = async () => {
     setIsSorting(true);
     shouldStop.current = false;
-    const newArray = [...array];
+    const newArray = array.map(bar => ({ ...bar })); // Create a deep copy of the array
     await mergeSortHelper(newArray, 0, newArray.length - 1);
     setIsSorting(false);
-    setComparingIndices(null);
   };
 
   // Quick Sort Implementation
-  const partition = async (arr: number[], low: number, high: number) => {
-    const pivot = arr[high];
+  const partition = async (arr: BarState[], low: number, high: number) => {
+    const pivot = arr[high].value;
     let i = low - 1;
 
     for (let j = low; j < high; j++) {
       if (shouldStop.current) return -1;
 
-      setComparingIndices([j, high]);
+      updateBarStates([j, high], { isComparing: true });
       await delay();
 
-      if (arr[j] < pivot) {
+      if (arr[j].value < pivot) {
         i++;
-        [arr[i], arr[j]] = [arr[j], arr[i]];
+        // Swap values
+        const temp = arr[i].value;
+        arr[i].value = arr[j].value;
+        arr[j].value = temp;
         setArray([...arr]);
+        
+        // Show swapping animation
+        updateBarStates([i, j], { isSwapping: true });
+        await delay();
       }
     }
 
-    [arr[i + 1], arr[high]] = [arr[high], arr[i + 1]];
+    // Swap pivot
+    const temp = arr[i + 1].value;
+    arr[i + 1].value = arr[high].value;
+    arr[high].value = temp;
     setArray([...arr]);
+    
+    // Show swapping animation
+    updateBarStates([i + 1, high], { isSwapping: true });
+    await delay();
+
     return i + 1;
   };
 
-  const quickSortHelper = async (arr: number[], low: number, high: number) => {
+  const quickSortHelper = async (arr: BarState[], low: number, high: number) => {
     if (low < high) {
       const pi = await partition(arr, low, high);
-      if (pi === -1) return; // Stop was requested
+      if (pi === -1) return;
       await quickSortHelper(arr, low, pi - 1);
       await quickSortHelper(arr, pi + 1, high);
     }
@@ -207,7 +299,6 @@ const SortingVisualizer: React.FC<SortingVisualizerProps> = ({ algorithm = 'bubb
     const newArray = [...array];
     await quickSortHelper(newArray, 0, newArray.length - 1);
     setIsSorting(false);
-    setComparingIndices(null);
   };
 
   const handleSort = () => {
@@ -230,7 +321,6 @@ const SortingVisualizer: React.FC<SortingVisualizerProps> = ({ algorithm = 'bubb
   const handleStop = () => {
     shouldStop.current = true;
     setIsSorting(false);
-    setComparingIndices(null);
   };
 
   const handleSpeedChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -248,7 +338,11 @@ const SortingVisualizer: React.FC<SortingVisualizerProps> = ({ algorithm = 'bubb
     for (let i = 0; i < numElements; i++) {
       newArray.push(Math.floor(Math.random() * 100) + 1);
     }
-    setArray(newArray);
+    setArray(newArray.map(value => ({
+      value,
+      isComparing: false,
+      isSwapping: false
+    })));
     setError('');
   };
 
@@ -276,7 +370,11 @@ const SortingVisualizer: React.FC<SortingVisualizerProps> = ({ algorithm = 'bubb
         throw new Error(`Maximum ${MAX_ELEMENTS} elements allowed`);
       }
 
-      setArray(numbers);
+      setArray(numbers.map(value => ({
+        value,
+        isComparing: false,
+        isSwapping: false
+      })));
       setError('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Invalid input');
@@ -287,13 +385,14 @@ const SortingVisualizer: React.FC<SortingVisualizerProps> = ({ algorithm = 'bubb
     <div className="min-h-screen bg-gray-900 text-white p-8">
       <div className="max-w-6xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-4 text-center text-blue-400">Sorting Visualizer</h1>
-          <p className="text-gray-400 text-center mb-6">Visualize different sorting algorithms</p>
+          <h1 className="text-3xl font-bold mb-4 text-center text-blue-400">
+            Sorting Algorithm Visualizer
+          </h1>
           
           <div className="flex flex-col items-center gap-6">
             <div className="flex justify-center gap-4">
               <button
-                onClick={generateNewArray}
+                onClick={resetArray}
                 disabled={isSorting}
                 className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-medium shadow-lg hover:shadow-blue-500/25"
               >
@@ -324,7 +423,7 @@ const SortingVisualizer: React.FC<SortingVisualizerProps> = ({ algorithm = 'bubb
                 <select
                   id="algorithm"
                   value={selectedAlgorithm}
-                  onChange={(e) => setSelectedAlgorithm(e.target.value as SortingAlgorithm)}
+                  onChange={handleAlgorithmChange}
                   disabled={isSorting}
                   className="w-full px-4 py-2 bg-gray-700 text-white border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
                 >
@@ -345,7 +444,7 @@ const SortingVisualizer: React.FC<SortingVisualizerProps> = ({ algorithm = 'bubb
                   min={MIN_SPEED}
                   max={MAX_SPEED}
                   value={speed}
-                  onChange={(e) => setSpeed(parseInt(e.target.value))}
+                  onChange={handleSpeedChange}
                   disabled={isSorting}
                   className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer disabled:opacity-50"
                 />
@@ -386,17 +485,20 @@ const SortingVisualizer: React.FC<SortingVisualizerProps> = ({ algorithm = 'bubb
         </div>
 
         <div className="bg-gray-800 rounded-xl p-8 shadow-2xl">
-          <div className="flex items-end justify-center gap-1 h-[400px]">
-            {array.map((value, index) => (
+          <div className="flex items-end justify-center gap-2 h-[400px]">
+            {array.map((bar, index) => (
               <div
                 key={index}
-                className="w-8 bg-blue-500 rounded-t transition-all duration-150"
+                className={`w-8 bg-blue-500 rounded-t-lg transition-all duration-300 ease-in-out ${
+                  bar.isComparing ? 'bg-yellow-500' : 
+                  bar.isSwapping ? 'bg-red-500' : 
+                  'bg-blue-500'
+                }`}
                 style={{
-                  height: `${(value / 100) * 100}%`,
-                  backgroundColor: isSorting ? 'rgb(59, 130, 246)' : 'rgb(99, 102, 241)'
+                  height: `${(bar.value / MAX_NUMBER) * 350}px`
                 }}
               >
-                <span className="text-xs text-white text-center block mt-1">{value}</span>
+                <span className="text-xs text-white text-center block mt-1">{bar.value}</span>
               </div>
             ))}
           </div>

@@ -21,7 +21,7 @@ export const dijkstra = (grid: Node[][], startNode: Node, endNode: Node): Node[]
     sortNodesByDistance(unvisitedNodes);
     const closestNode = unvisitedNodes.shift()!;
     
-    if (closestNode.isWall || closestNode.isBlock) continue;
+    if (closestNode.isWall || closestNode.isBlock === true) continue;
     if (closestNode.distance === Infinity) return visitedNodes;
     
     closestNode.isVisited = true;
@@ -44,7 +44,7 @@ export const aStar = (grid: Node[][], startNode: Node, endNode: Node): Node[] =>
     sortNodesByFScore(unvisitedNodes);
     const closestNode = unvisitedNodes.shift()!;
     
-    if (closestNode.isWall || closestNode.isBlock) continue;
+    if (closestNode.isWall || closestNode.isBlock === true) continue;
     if (closestNode.distance === Infinity) return visitedNodes;
     
     closestNode.isVisited = true;
@@ -72,7 +72,11 @@ const sortNodesByDistance = (unvisitedNodes: Node[]): void => {
 };
 
 const sortNodesByFScore = (unvisitedNodes: Node[]): void => {
-  unvisitedNodes.sort((nodeA, nodeB) => nodeA.fScore! - nodeB.fScore!);
+  unvisitedNodes.sort((nodeA, nodeB) => {
+    const scoreA = nodeA.fScore ?? Infinity;
+    const scoreB = nodeB.fScore ?? Infinity;
+    return scoreA - scoreB;
+  });
 };
 
 const updateNeighbors = (node: Node, grid: Node[][]): void => {

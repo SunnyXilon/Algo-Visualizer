@@ -183,7 +183,42 @@ const PathfindingVisualizer: React.FC<PathfindingVisualizerProps> = ({ algorithm
 
   const delay = () => new Promise(resolve => setTimeout(resolve, speed));
 
-  // Dijkstra's Algorithm
+  const visualizePath = async (endNode: Node, previous: { [key: string]: Node | null }) => {
+    let currentNode = endNode;
+    const path: Node[] = [];
+    
+    // First, collect all nodes in the path
+    while (currentNode && !currentNode.isStart) {
+      path.unshift(currentNode);
+      const key = `${currentNode.row},${currentNode.col}`;
+      currentNode = previous[key]!;
+    }
+    
+    // Then visualize the path with delays
+    for (const node of path) {
+      if (shouldStop.current) return;
+      
+      setGrid(prevGrid => {
+        const newGrid = prevGrid.map(row => 
+          row.map(cell => {
+            if (cell.row === node.row && cell.col === node.col) {
+              return {
+                ...cell,
+                isInPath: true,
+                isVisited: false // Reset visited state to show path more clearly
+              };
+            }
+            return cell;
+          })
+        );
+        return newGrid;
+      });
+      
+      await delay();
+    }
+  };
+
+  // Update Dijkstra's Algorithm
   const dijkstraAlgorithm = async () => {
     setIsVisualizing(true);
     shouldStop.current = false;
@@ -195,7 +230,7 @@ const PathfindingVisualizer: React.FC<PathfindingVisualizerProps> = ({ algorithm
 
     const distances: { [key: string]: number } = {};
     const previous: { [key: string]: Node | null } = {};
-    const unvisited = new Set<string>();
+    const unvisited = new PriorityQueue<string>();
 
     // Initialize distances
     grid.forEach(row => {
@@ -203,55 +238,24 @@ const PathfindingVisualizer: React.FC<PathfindingVisualizerProps> = ({ algorithm
         const key = `${cell.row},${cell.col}`;
         distances[key] = Infinity;
         previous[key] = null;
-        unvisited.add(key);
       });
     });
 
     distances[`${start.row},${start.col}`] = 0;
+    unvisited.enqueue(`${start.row},${start.col}`, 0);
 
-    while (unvisited.size > 0 && !shouldStop.current) {
-      // Find unvisited node with smallest distance
-      let minDistance = Infinity;
-      let currentKey = '';
-      let currentCell: Node | undefined;
-
-      unvisited.forEach(key => {
-        if (distances[key] < minDistance) {
-          minDistance = distances[key];
-          const [row, col] = key.split(',').map(Number);
-          currentCell = grid[row][col];
-          currentKey = key;
-        }
-      });
-
-      if (!currentCell || minDistance === Infinity) break;
+    while (!unvisited.isEmpty() && !shouldStop.current) {
+      const currentKey = unvisited.dequeue()!;
+      const [currentRow, currentCol] = currentKey.split(',').map(Number);
+      const currentCell = grid[currentRow][currentCol];
 
       if (currentCell.isEnd) {
-        // Reconstruct path
-        let pathCell: Node = currentCell;
-        while (pathCell && pathCell.isStart === false) {
-          const key = `${pathCell.row},${pathCell.col}`;
-          const prev = previous[key];
-          if (prev) {
-            setGrid(prevGrid => {
-              const newGrid = [...prevGrid];
-              if (newGrid[prev.row][prev.col].isStart === false) {
-                newGrid[prev.row][prev.col] = {
-                  ...prev,
-                  isInPath: true
-                };
-              }
-              return newGrid;
-            });
-            pathCell = prev;
-          } else {
-            break;
-          }
-        }
+        await visualizePath(currentCell, previous);
         break;
       }
 
-      unvisited.delete(currentKey);
+      if (currentCell.isVisited) continue;
+      currentCell.isVisited = true;
 
       // Update neighbors
       const neighbors = [
@@ -267,25 +271,29 @@ const PathfindingVisualizer: React.FC<PathfindingVisualizerProps> = ({ algorithm
           neighbor.col >= 0 && neighbor.col < GRID_COLS
         ) {
           const neighborCell = grid[neighbor.row][neighbor.col];
-          // Skip both walls as they are obstacles
-          if (neighborCell.isWall) continue;
+          if (neighborCell.isWall || neighborCell.isVisited) continue;
 
           const neighborKey = `${neighbor.row},${neighbor.col}`;
-          if (!unvisited.has(neighborKey)) continue;
-
           const newDistance = distances[currentKey] + 1;
+
           if (newDistance < distances[neighborKey]) {
             distances[neighborKey] = newDistance;
             previous[neighborKey] = currentCell;
+            unvisited.enqueue(neighborKey, newDistance);
 
-            // Only mark as visited if it's not the end node
             if (neighborCell.isEnd === false) {
               setGrid(prevGrid => {
-                const newGrid = [...prevGrid];
-                newGrid[neighbor.row][neighbor.col] = {
-                  ...neighborCell,
-                  isVisited: true
-                };
+                const newGrid = prevGrid.map(row => 
+                  row.map(cell => {
+                    if (cell.row === neighbor.row && cell.col === neighbor.col) {
+                      return {
+                        ...cell,
+                        isVisited: true
+                      };
+                    }
+                    return cell;
+                  })
+                );
                 return newGrid;
               });
               await delay();
@@ -298,7 +306,29 @@ const PathfindingVisualizer: React.FC<PathfindingVisualizerProps> = ({ algorithm
     setIsVisualizing(false);
   };
 
-  // A* Search Algorithm
+  // Priority Queue implementation for Dijkstra's algorithm
+  class PriorityQueue<T> {
+    private items: { item: T; priority: number }[] = [];
+
+    enqueue(item: T, priority: number): void {
+      this.items.push({ item, priority });
+      this.items.sort((a, b) => a.priority - b.priority);
+    }
+
+    dequeue(): T | undefined {
+      return this.items.shift()?.item;
+    }
+
+    isEmpty(): boolean {
+      return this.items.length === 0;
+    }
+
+    has(item: T): boolean {
+      return this.items.some(({ item: i }) => i === item);
+    }
+  }
+
+  // Update A* Algorithm
   const aStarAlgorithm = async () => {
     setIsVisualizing(true);
     shouldStop.current = false;
@@ -308,7 +338,7 @@ const PathfindingVisualizer: React.FC<PathfindingVisualizerProps> = ({ algorithm
     const end = grid.flat().find(cell => cell.isEnd);
     if (!start || !end) return;
 
-    const openSet = new Set<string>([`${start.row},${start.col}`]);
+    const openSet = new PriorityQueue<string>();
     const closedSet = new Set<string>();
     const gScore: { [key: string]: number } = {};
     const fScore: { [key: string]: number } = {};
@@ -324,52 +354,23 @@ const PathfindingVisualizer: React.FC<PathfindingVisualizerProps> = ({ algorithm
       });
     });
 
-    gScore[`${start.row},${start.col}`] = 0;
-    fScore[`${start.row},${start.col}`] = heuristic(start, end);
+    const startKey = `${start.row},${start.col}`;
+    gScore[startKey] = 0;
+    fScore[startKey] = heuristic(start, end);
+    openSet.enqueue(startKey, fScore[startKey]);
 
-    while (openSet.size > 0 && !shouldStop.current) {
-      // Find node with lowest fScore
-      let currentKey = '';
-      let minFScore = Infinity;
-      openSet.forEach(key => {
-        if (fScore[key] < minFScore) {
-          minFScore = fScore[key];
-          currentKey = key;
-        }
-      });
-
+    while (!openSet.isEmpty() && !shouldStop.current) {
+      const currentKey = openSet.dequeue()!;
       const [currentRow, currentCol] = currentKey.split(',').map(Number);
       const currentCell = grid[currentRow][currentCol];
 
       if (currentCell.isEnd) {
-        // Reconstruct path
-        let pathCell: Node = currentCell;
-        while (pathCell && pathCell.isStart === false) {
-          const key = `${pathCell.row},${pathCell.col}`;
-          const prev = cameFrom[key];
-          if (prev) {
-            setGrid(prevGrid => {
-              const newGrid = [...prevGrid];
-              if (newGrid[prev.row][prev.col].isStart === false) {
-                newGrid[prev.row][prev.col] = {
-                  ...prev,
-                  isInPath: true
-                };
-              }
-              return newGrid;
-            });
-            pathCell = prev;
-          } else {
-            break;
-          }
-        }
+        await visualizePath(currentCell, cameFrom);
         break;
       }
 
-      openSet.delete(currentKey);
       closedSet.add(currentKey);
 
-      // Update neighbors
       const neighbors = [
         { row: currentCell.row - 1, col: currentCell.col },
         { row: currentCell.row + 1, col: currentCell.col },
@@ -390,32 +391,40 @@ const PathfindingVisualizer: React.FC<PathfindingVisualizerProps> = ({ algorithm
 
           const tentativeGScore = gScore[currentKey] + 1;
 
-          if (!openSet.has(neighborKey)) {
-            openSet.add(neighborKey);
-          } else if (tentativeGScore >= gScore[neighborKey]) {
-            continue;
-          }
+          if (tentativeGScore < gScore[neighborKey]) {
+            cameFrom[neighborKey] = currentCell;
+            gScore[neighborKey] = tentativeGScore;
+            fScore[neighborKey] = gScore[neighborKey] + heuristic(neighborCell, end);
 
-          cameFrom[neighborKey] = currentCell;
-          gScore[neighborKey] = tentativeGScore;
-          fScore[neighborKey] = gScore[neighborKey] + heuristic(neighborCell, end);
+            if (!openSet.has(neighborKey)) {
+              openSet.enqueue(neighborKey, fScore[neighborKey]);
+            }
 
-          if (neighborCell.isEnd === false) {
-            setGrid(prevGrid => {
-              const newGrid = [...prevGrid];
-              newGrid[neighbor.row][neighbor.col] = {
-                ...neighborCell,
-                isVisited: true
-              };
-              return newGrid;
-            });
-            await delay();
+            if (neighborCell.isEnd === false) {
+              setGrid(prevGrid => {
+                const newGrid = [...prevGrid];
+                newGrid[neighbor.row][neighbor.col] = {
+                  ...neighborCell,
+                  isVisited: true
+                };
+                return newGrid;
+              });
+              await delay();
+            }
           }
         }
       }
     }
 
     setIsVisualizing(false);
+  };
+
+  // Improved heuristic function for A*
+  const heuristic = (a: Node, b: Node): number => {
+    // Using Euclidean distance for more accurate heuristic
+    const dx = Math.abs(a.row - b.row);
+    const dy = Math.abs(a.col - b.col);
+    return Math.sqrt(dx * dx + dy * dy);
   };
 
   // Breadth First Search
@@ -431,14 +440,17 @@ const PathfindingVisualizer: React.FC<PathfindingVisualizerProps> = ({ algorithm
     const queue: Node[] = [start];
     const visited = new Set<string>();
     const previous: { [key: string]: Node | null } = {};
+    let found = false;
 
     visited.add(`${start.row},${start.col}`);
     previous[`${start.row},${start.col}`] = null;
 
-    while (queue.length > 0 && !shouldStop.current) {
+    while (queue.length > 0 && !shouldStop.current && !found) {
       const currentCell = queue.shift()!;
+      const currentKey = `${currentCell.row},${currentCell.col}`;
 
       if (currentCell.isEnd) {
+        found = true;
         // Reconstruct path
         let pathCell: Node = currentCell;
         while (pathCell && pathCell.isStart === false) {
@@ -476,10 +488,9 @@ const PathfindingVisualizer: React.FC<PathfindingVisualizerProps> = ({ algorithm
           neighbor.col >= 0 && neighbor.col < GRID_COLS
         ) {
           const neighborCell = grid[neighbor.row][neighbor.col];
-          if (neighborCell.isWall) continue;
-
           const neighborKey = `${neighbor.row},${neighbor.col}`;
-          if (visited.has(neighborKey)) continue;
+
+          if (neighborCell.isWall || visited.has(neighborKey)) continue;
 
           visited.add(neighborKey);
           previous[neighborKey] = currentCell;
@@ -513,46 +524,44 @@ const PathfindingVisualizer: React.FC<PathfindingVisualizerProps> = ({ algorithm
     const end = grid.flat().find(cell => cell.isEnd);
     if (!start || !end) return;
 
-    const stack: Node[] = [start];
     const visited = new Set<string>();
     const previous: { [key: string]: Node | null } = {};
 
-    visited.add(`${start.row},${start.col}`);
-    previous[`${start.row},${start.col}`] = null;
-
-    while (stack.length > 0 && !shouldStop.current) {
-      const currentCell = stack.pop()!;
-
-      if (currentCell.isEnd) {
-        // Reconstruct path
-        let pathCell: Node = currentCell;
-        while (pathCell && pathCell.isStart === false) {
-          const key = `${pathCell.row},${pathCell.col}`;
-          const prev = previous[key];
-          if (prev) {
-            setGrid(prevGrid => {
-              const newGrid = [...prevGrid];
-              if (newGrid[prev.row][prev.col].isStart === false) {
-                newGrid[prev.row][prev.col] = {
-                  ...prev,
-                  isInPath: true
-                };
-              }
-              return newGrid;
-            });
-            pathCell = prev;
-          } else {
-            break;
-          }
-        }
-        break;
+    const dfs = async (currentCell: Node): Promise<boolean> => {
+      if (shouldStop.current) return false;
+      
+      const currentKey = `${currentCell.row},${currentCell.col}`;
+      
+      // Skip if already visited or is a wall
+      if (visited.has(currentKey) || currentCell.isWall) return false;
+      
+      // Mark as visited
+      visited.add(currentKey);
+      
+      // Visualize the current cell if it's not start or end
+      if (!currentCell.isStart && !currentCell.isEnd) {
+        setGrid(prevGrid => {
+          const newGrid = [...prevGrid];
+          newGrid[currentCell.row][currentCell.col] = {
+            ...currentCell,
+            isVisited: true
+          };
+          return newGrid;
+        });
+        await delay();
       }
 
+      // Check if we reached the end
+      if (currentCell.isEnd) {
+        return true;
+      }
+
+      // Explore neighbors in order: Up, Right, Down, Left
       const neighbors = [
-        { row: currentCell.row - 1, col: currentCell.col },
-        { row: currentCell.row + 1, col: currentCell.col },
-        { row: currentCell.row, col: currentCell.col - 1 },
-        { row: currentCell.row, col: currentCell.col + 1 }
+        { row: currentCell.row - 1, col: currentCell.col }, // Up
+        { row: currentCell.row, col: currentCell.col + 1 }, // Right
+        { row: currentCell.row + 1, col: currentCell.col }, // Down
+        { row: currentCell.row, col: currentCell.col - 1 }  // Left
       ];
 
       for (const neighbor of neighbors) {
@@ -561,36 +570,37 @@ const PathfindingVisualizer: React.FC<PathfindingVisualizerProps> = ({ algorithm
           neighbor.col >= 0 && neighbor.col < GRID_COLS
         ) {
           const neighborCell = grid[neighbor.row][neighbor.col];
-          if (neighborCell.isWall) continue;
-
           const neighborKey = `${neighbor.row},${neighbor.col}`;
-          if (visited.has(neighborKey)) continue;
 
-          visited.add(neighborKey);
-          previous[neighborKey] = currentCell;
-          stack.push(neighborCell);
-
-          if (neighborCell.isEnd === false) {
-            setGrid(prevGrid => {
-              const newGrid = [...prevGrid];
-              newGrid[neighbor.row][neighbor.col] = {
-                ...neighborCell,
-                isVisited: true
-              };
-              return newGrid;
-            });
-            await delay();
+          if (!visited.has(neighborKey) && !neighborCell.isWall) {
+            previous[neighborKey] = currentCell;
+            const found = await dfs(neighborCell);
+            if (found) {
+              // Mark the path as we backtrack
+              if (!currentCell.isStart) {
+                setGrid(prevGrid => {
+                  const newGrid = [...prevGrid];
+                  newGrid[currentCell.row][currentCell.col] = {
+                    ...currentCell,
+                    isInPath: true
+                  };
+                  return newGrid;
+                });
+                await delay();
+              }
+              return true;
+            }
           }
         }
       }
-    }
+
+      return false;
+    };
+
+    // Start DFS from the start node
+    const found = await dfs(start);
 
     setIsVisualizing(false);
-  };
-
-  // Helper function for A* heuristic
-  const heuristic = (a: Node, b: Node): number => {
-    return Math.abs(a.row - b.row) + Math.abs(a.col - b.col);
   };
 
   const handleAlgorithmChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -766,8 +776,8 @@ const PathfindingVisualizer: React.FC<PathfindingVisualizerProps> = ({ algorithm
                     cell.isWall ? 'bg-black' :
                     cell.isStart ? 'bg-green-500' :
                     cell.isEnd ? 'bg-red-500' :
-                    cell.isVisited ? 'bg-blue-500' :
                     cell.isInPath ? 'bg-yellow-500' :
+                    cell.isVisited ? 'bg-blue-500' :
                     'bg-gray-700'
                   } hover:opacity-80 cursor-pointer`}
                 />
@@ -803,4 +813,4 @@ const PathfindingVisualizer: React.FC<PathfindingVisualizerProps> = ({ algorithm
   );
 };
 
-export default PathfindingVisualizer; 
+export default PathfindingVisualizer;

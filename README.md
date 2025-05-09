@@ -1,46 +1,70 @@
-# Getting Started with Create React App
+# Algorithm Visualizer
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+An interactive web application built with React and TypeScript that visualizes various algorithms, including pathfinding and sorting algorithms. This tool helps users understand how different algorithms work by providing visual representations of their operation.
 
-## Available Scripts
+## Features
 
-In the project directory, you can run:
+### Pathfinding Algorithms
+- Dijkstra's Algorithm
+- A* Search
+- Breadth-First Search (BFS)
+- Depth-First Search (DFS)
+- Interactive grid with:
+  - Wall placement (click and drag)
+  - Adjustable start and end points
+  - Visual representation of visited nodes and final path
 
-### `npm start`
+### Sorting Algorithms
+- Bubble Sort
+- Insertion Sort
+- Merge Sort
+- Quick Sort
+- Features:
+  - Random array generation
+  - Custom array input
+  - Visual representation of comparisons and swaps
+  - Adjustable array size and speed
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+### Common Features
+- Adjustable visualization speed
+- Clear and intuitive user interface
+- Real-time visualization
+- Stop/Reset functionality
 
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
+## Getting Started
 
-### `npm test`
+1. Clone the repository
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Start the development server:
+   ```bash
+   npm start
+   ```
+4. Open [http://localhost:3000](http://localhost:3000) to view it in your browser
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+## Usage
 
-### `npm run build`
+### Pathfinding Visualizer
+1. Select a pathfinding algorithm from the dropdown menu
+2. Use the wall tool to create obstacles (click and drag)
+3. Optionally reposition start (green) and end (red) points
+4. Click "Visualize" to see the algorithm in action
+5. Adjust the speed slider to control visualization speed
+6. Use "Clear Walls" to remove obstacles or "Reset Grid" to start over
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+### Sorting Visualizer
+1. Select a sorting algorithm from the dropdown menu
+2. Either:
+   - Click "Generate New Array" for a random array
+   - Or input your own comma-separated numbers
+3. Click "Sort" to start the visualization
+4. Adjust the speed slider to control visualization speed
+5. Use "Stop" to pause the visualization
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+## Technologies Used
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
-
-### `npm run eject`
-
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
-
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
-
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
-
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
+- React
+- TypeScript
+- Tailwind CSS
