@@ -68,3 +68,4 @@ An interactive web application built with React and TypeScript that visualizes v
 - React
 - TypeScript
 - Tailwind CSS
+- Cursor AI
